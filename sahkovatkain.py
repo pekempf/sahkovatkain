@@ -98,12 +98,17 @@ def main():
             "loads": {},
         }
         for name, hours in LOADS.items():
-            cheapest = sorted(points, key=lambda x: x["price"])[:hours]
-            if len(cheapest) < hours:
+            # If today has fewer hours left than requested, use every remaining
+            # hour instead of discarding today as an option. This lets cheap
+            # remaining electricity be used before a more expensive future day.
+            use_hours = min(hours, len(points))
+            if use_hours == 0:
                 continue
+            cheapest = sorted(points, key=lambda x: x["price"])[:use_hours]
             item["loads"][name] = {
                 "hours": hours,
-                "avg": round(sum(p["price"] for p in cheapest) / hours, 3),
+                "available_hours": use_hours,
+                "avg": round(sum(p["price"] for p in cheapest) / use_hours, 3),
                 "selected": [p["hour"] for p in sorted(cheapest, key=lambda x: x["ts"])],
             }
         days.append(item)
