@@ -76,6 +76,10 @@ def main():
         for ts, price in merged.items():
             local = ts.astimezone(TZ)
             if local.date() == day:
+                # For today, past hours can no longer be used for heating.
+                # Keep the current clock hour and all future hours.
+                if day == now.date() and local < now.replace(minute=0, second=0, microsecond=0):
+                    continue
                 source = "actual" if ts in actual else "forecast"
                 points.append({
                     "ts": ts,
