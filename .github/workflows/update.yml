@@ -3,7 +3,7 @@ name: Update Sahkovatkain forecast
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 * * * *"
 
 permissions:
   contents: write
@@ -22,7 +22,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/sahkovatkain.txt
+          git add deploy/sahkovatkain.txt deploy/sahkovatkain.json
           if git diff --cached --quiet; then
             echo "No changes"
           else
