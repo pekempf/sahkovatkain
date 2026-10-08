@@ -227,8 +227,10 @@ def main():
                 }
 
     rolling_plans = make_cross_day_plans(merged, actual, now, loads, settings)
-    state_raw = os.getenv("SHELLY_HEATING_STATE", "")
-    heating_state = json.loads(state_raw) if state_raw and state_raw != "null" else None
+    # Heating counter arrives as an additional KVS value in the same dispatch.
+    heating_state = settings.get("sahkovatkain-o1-state")
+    if isinstance(heating_state, str):
+        heating_state = json.loads(heating_state)
     hot_water_plan = plan_hot_water(merged, actual, now, transfer, heating_state)
 
     result = {
