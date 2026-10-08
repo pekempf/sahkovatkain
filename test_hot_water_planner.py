@@ -48,5 +48,31 @@ class HotWaterTests(unittest.TestCase):
         self.assertTrue(all(datetime.fromisoformat(x["start"]) < deadline
                             for x in result["selected"]))
 
+    def test_shelly_initial_330_seconds(self):
+        state = {"last": 291450, "total": 330}
+        result = plan_hot_water(self.prices, {}, self.now, self.transfer, state)
+        self.assertEqual(result["status"], "initial_cycle_in_progress")
+        self.assertEqual(result["heated_seconds"], 330)
+        self.assertEqual(result["remaining_seconds"], 14070)
+        self.assertEqual(result["selected"], [])
+
+    def test_shelly_completed_cycle_and_partial_progress(self):
+        state = {"last": 300000, "total": 330,
+                 "last_completed": int(utc("2026-10-07T06:00:00Z").timestamp()),
+                 "completed_count": 1}
+        result = plan_hot_water(self.prices, {}, self.now, self.transfer, state)
+        self.assertEqual(result["status"], "planned")
+        self.assertEqual(result["remaining_seconds"], 14070)
+        self.assertEqual(result["remaining_hours"], 4)
+        self.assertEqual(len(result["selected"]), 4)
+
+    def test_shelly_deadline_blocks_late_hours(self):
+        state = {"last": 300000, "total": 0,
+                 "last_completed": int(utc("2026-10-06T06:00:00Z").timestamp())}
+        result = plan_hot_water(self.prices, {}, self.now, self.transfer, state)
+        deadline = datetime.fromisoformat(result["deadline"])
+        self.assertTrue(all(datetime.fromisoformat(x["start"]) < deadline
+                            for x in result["selected"]))
+
 if __name__ == "__main__":
     unittest.main()
