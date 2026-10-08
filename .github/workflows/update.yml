@@ -17,6 +17,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Calculate forecast
+        env:
+          CLOUDFLARE_READ_TOKEN: ${{ secrets.CLOUDFLARE_READ_TOKEN }}
+          SETTINGS_URL: ${{ vars.SETTINGS_URL }}
         run: python sahkovatkain.py
       - name: Commit result if changed
         run: |
