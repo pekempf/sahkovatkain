@@ -46,6 +46,20 @@ jobs:
               except Exception as error:
                   print(label, "connection error", type(error).__name__)
           PY
+      - name: Diagnose curl connectivity
+        env:
+          SETTINGS_URL: ${{ vars.SETTINGS_URL }}
+        run: |
+          echo "Proxy variables present (values hidden):"
+          for name in HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy; do
+            if [ -n "${!name}" ]; then echo "$name=set"; else echo "$name=unset"; fi
+          done
+          echo "curl to Worker root:"
+          root="${SETTINGS_URL%/settings}/"
+          curl --silent --show-error --max-time 20 --output /dev/null --dump-header /tmp/bridge-headers --write-out 'HTTP %{http_code}; remote_ip %{remote_ip}; effective_url %{url_effective}\n' "$root" || true
+          grep -iE '^(HTTP/|server:|content-type:|cf-ray:|cf-mitigated:)' /tmp/bridge-headers || true
+          echo "curl with browser-like User-Agent:"
+          curl --silent --show-error --max-time 20 --user-agent 'Mozilla/5.0' --output /dev/null --write-out 'HTTP %{http_code}; remote_ip %{remote_ip}\n' "$root" || true
       - name: Calculate forecast
         env:
           CLOUDFLARE_READ_TOKEN: ${{ secrets.CLOUDFLARE_READ_TOKEN }}
