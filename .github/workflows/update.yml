@@ -26,11 +26,11 @@ jobs:
           url = os.environ["SETTINGS_URL"]
           token = os.environ.get("CLOUDFLARE_READ_TOKEN", "")
           print("Read token configured:", bool(token))
-          for label, headers in (
-              ("without token", {}),
-              ("with token", {"Authorization": "Bearer " + token} if token else {}),
+          root = url.split("/settings")[0] + "/"\n          for label, target, headers in (
+              ("root without token", root, {}),\n              ("settings without token", url, {}),
+              ("settings with token", url, {"Authorization": "Bearer " + token} if token else {}),
           ):
-              request = urllib.request.Request(url, headers=headers)
+              request = urllib.request.Request(target, headers=headers)
               try:
                   with urllib.request.urlopen(request, timeout=15) as response:
                       print(label, "HTTP", response.status, "content-type", response.headers.get("content-type"))
