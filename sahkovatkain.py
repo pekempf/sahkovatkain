@@ -67,15 +67,22 @@ def actual_points(start, end):
 def read_settings():
     raw = os.getenv("SHELLY_EVENT_SETTINGS", "")
     if raw and raw not in ("null", "{}"):
-        try:
-            data = json.loads(raw)
-            for key in ("porssi", "porssi-1", "porssi-2", "porssi-3"):
-                if not isinstance(data.get(key), dict):
-                    raise ValueError("Missing settings: " + key)
-            print("Shelly settings received directly from GitHub dispatch")
-            return data
-        except (ValueError, TypeError) as exc:
-            print("Invalid Shelly dispatch settings:", str(exc))
+        # Shelly KVS values may be JSON-encoded strings rather than objects.
+        # Do not silently fall back to sample settings for a dispatch event.
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("Shelly dispatch settings must be an object")
+        for key in ("porssi", "porssi-1", "porssi-2", "porssi-3"):
+            value = data.get(key)
+            if isinstance(value, str):
+                value = json.loads(value)
+            if not isinstance(value, dict):
+                raise ValueError("Missing or invalid settings: " + key)
+            data[key] = value
+        print("Shelly settings received directly from GitHub dispatch")
+        return data
+    if os.getenv("GITHUB_EVENT_NAME") == "repository_dispatch":
+        raise ValueError("Shelly dispatch event contains no settings")
     print("Using stored sample settings (scheduled/manual run)")
     return SHELLY_SETTINGS
 
