@@ -86,6 +86,66 @@ def read_settings():
     print("Using stored sample settings (scheduled/manual run)")
     return SHELLY_SETTINGS
 
+def make_cross_day_plans(merged, actual, now, loads, settings):
+    """Select individual cheapest hours across rolling 24..120 hour windows.
+
+    Forecast-only: this does not control relays or enforce heat demand.
+    """
+    now_hour = now.replace(minute=0, second=0, microsecond=0)
+    points = []
+    for ts, spot in merged.items():
+        local = ts.astimezone(TZ)
+        if local < now_hour:
+            continue
+        points.append({
+            "ts": ts,
+            "start": local.isoformat(timespec="minutes"),
+            "date": local.date().isoformat(),
+            "hour": local.hour,
+            "price": round(spot + transfer(local), 4),
+            "source": "actual" if ts in actual else "forecast",
+        })
+    points.sort(key=lambda p: p["ts"])
+    result = {}
+    for index, name in enumerate(("lvv", "floor", "direct"), 1):
+        cfg = settings["porssi-" + str(index)]
+        # Existing Shelly m2.c is a daily-hour target, not a 5-day quota.
+        hours_per_day = max(0, min(24, int(cfg["m2"]["c"])))
+        horizons = {}
+        for days in range(1, DAYS + 1):
+            cutoff = now_hour.astimezone(timezone.utc) + timedelta(hours=24 * days)
+            candidates = [p for p in points if p["ts"] < cutoff]
+            required = hours_per_day * days
+            # If forecast is incomplete, report that rather than pretending
+            # the available cheapest hours cover the whole deadline.
+            chosen = sorted(candidates, key=lambda p: (p["price"], p["ts"]))[:required]
+            chosen.sort(key=lambda p: p["ts"])
+            complete = len(candidates) >= 24 * days and len(chosen) == required
+            blocks = []
+            for p in chosen:
+                item = {"start": p["start"], "price": p["price"], "source": p["source"]}
+                if blocks and p["ts"] == blocks[-1]["_end"]:
+                    blocks[-1]["hours"] += 1
+                    blocks[-1]["_end"] = p["ts"] + timedelta(hours=1)
+                else:
+                    blocks.append({"start": p["start"], "hours": 1,
+                                   "_end": p["ts"] + timedelta(hours=1)})
+            for b in blocks:
+                del b["_end"]
+            horizons[str(days)] = {
+                "window_hours": 24 * days,
+                "requested_hours": required,
+                "available_hours": len(candidates),
+                "selected_hours": len(chosen),
+                "complete": complete,
+                "average_price": round(sum(p["price"] for p in chosen) / len(chosen), 3) if chosen else None,
+                "selected": [{"start": p["start"], "price": p["price"],
+                              "source": p["source"]} for p in chosen],
+                "blocks": blocks,
+            }
+        result[name] = {"hours_per_day": hours_per_day, "horizons": horizons}
+    return result
+
 def main():
     settings = read_settings()
     loads = {name: int(settings["porssi-" + str(i)]["m2"]["c"])
@@ -165,8 +225,10 @@ def main():
                     "today": winner["date"] == now.date().isoformat(),
                 }
 
+    rolling_plans = make_cross_day_plans(merged, actual, now, loads, settings)
+
     result = {
-        "version": 2,
+        "version": 3,
         "updated": now.isoformat(timespec="seconds"),
         "timezone": "Europe/Helsinki",
         "price": "spot_with_vat_plus_transfer_c_per_kwh",
@@ -174,6 +236,8 @@ def main():
         "loads": loads,
         "days": days,
         "best": best,
+        "rolling_plans": rolling_plans,
+        "rolling_plan_note": "Forecast only; not relay commands. Each horizon assumes daily m2.c hours of demand.",
     }
 
     Path("deploy").mkdir(exist_ok=True)
