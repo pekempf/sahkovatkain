@@ -9,6 +9,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from hot_water_planner import plan_hot_water
 
 TZ = ZoneInfo("Europe/Helsinki")
 FORECAST_URL = "https://raw.githubusercontent.com/vividfog/nordpool-predict-fi/main/deploy/prediction.json"
@@ -226,6 +227,9 @@ def main():
                 }
 
     rolling_plans = make_cross_day_plans(merged, actual, now, loads, settings)
+    state_raw = os.getenv("SHELLY_HEATING_STATE", "")
+    heating_state = json.loads(state_raw) if state_raw and state_raw != "null" else None
+    hot_water_plan = plan_hot_water(merged, actual, now, transfer, heating_state)
 
     result = {
         "version": 3,
@@ -237,6 +241,7 @@ def main():
         "days": days,
         "best": best,
         "rolling_plans": rolling_plans,
+        "hot_water_plan": hot_water_plan,
         "rolling_plan_note": "Forecast only; not relay commands. Each horizon assumes daily m2.c hours of demand.",
     }
 
