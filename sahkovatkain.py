@@ -2,6 +2,7 @@
 import csv
 import io
 import json
+import os
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -62,7 +63,30 @@ def actual_points(start, end):
             pass
     return out
 
+def read_settings():
+    token = os.getenv("CLOUDFLARE_READ_TOKEN")
+    if not token:
+        return SHELLY_SETTINGS
+    url = os.getenv("SETTINGS_URL")
+    if not url:
+        return SHELLY_SETTINGS
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.load(response)["settings"]
+        for key in ("porssi", "porssi-1", "porssi-2", "porssi-3"):
+            if not isinstance(data.get(key), dict):
+                raise ValueError("Invalid settings")
+        print("Shelly settings loaded from bridge")
+        return data
+    except Exception as exc:
+        print("Bridge unavailable; using stored sample settings:", exc)
+        return SHELLY_SETTINGS
+
 def main():
+    settings = read_settings()
+    loads = {name: int(settings["porssi-" + str(i)]["m2"]["c"])
+             for i, name in enumerate(("lvv", "floor", "direct"), 1)}
     now = datetime.now(TZ)
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=DAYS + 1)
@@ -106,7 +130,7 @@ def main():
             "forecast_hours": sum(p["source"] == "forecast" for p in points),
             "loads": {},
         }
-        for name, hours in LOADS.items():
+        for name, hours in loads.items():
             # If today has fewer hours left than requested, use every remaining
             # hour instead of discarding today as an option. This lets cheap
             # remaining electricity be used before a more expensive future day.
@@ -126,7 +150,7 @@ def main():
     # calendar day is cheapest. Shelly only needs to pick the horizon that
     # corresponds to its current remaining deadline.
     best = {}
-    for name in LOADS:
+    for name in loads:
         best[name] = {}
         for horizon in range(1, DAYS + 1):
             candidates = [d for d in days[:horizon] if name in d["loads"]]
@@ -144,7 +168,7 @@ def main():
         "timezone": "Europe/Helsinki",
         "price": "spot_with_vat_plus_transfer_c_per_kwh",
         "transfer": {"winter_weekday_07_22": 3.20, "other": 1.90},
-        "loads": LOADS,
+        "loads": loads,
         "days": days,
         "best": best,
     }
@@ -159,7 +183,7 @@ def main():
     lines = [
         "# sahkovatkain v0.2",
         "# updated=" + now.isoformat(timespec="seconds"),
-        "# date,lvv3,floor6,direct12",
+        "# date,lvv%d,floor%d,direct%d" % (loads["lvv"], loads["floor"], loads["direct"]),
     ]
     for d in days:
         vals = []
