@@ -1,11 +1,10 @@
 name: Update Sahkovatkain forecast
 
+# Shelly sends current KVS settings and triggers this workflow hourly.
+# Do not schedule standalone runs: those lack live Shelly settings.
 on:
-  workflow_dispatch:
   repository_dispatch:
     types: [shelly_settings]
-  schedule:
-    - cron: "17 * * * *"
 
 permissions:
   contents: write
