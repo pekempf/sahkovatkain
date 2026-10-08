@@ -71,7 +71,7 @@ def read_settings():
     url = os.getenv("SETTINGS_URL")
     if not url:
         return SHELLY_SETTINGS
-    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "Mozilla/5.0", "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=15) as response:
             data = json.load(response)["settings"]
