@@ -65,32 +65,19 @@ def actual_points(start, end):
     return out
 
 def read_settings():
-    token = os.getenv("CLOUDFLARE_READ_TOKEN")
-    if not token:
-        return SHELLY_SETTINGS
-    url = os.getenv("SETTINGS_URL")
-    if not url:
-        return SHELLY_SETTINGS
-    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "Mozilla/5.0", "Accept": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            data = json.load(response)["settings"]
-        for key in ("porssi", "porssi-1", "porssi-2", "porssi-3"):
-            if not isinstance(data.get(key), dict):
-                raise ValueError("Invalid settings")
-        print("Shelly settings loaded from bridge")
-        return data
-    except urllib.error.HTTPError as exc:
-        print("Bridge HTTP status:", exc.code)
-        for name in ("server", "content-type", "cf-ray", "cf-mitigated", "location", "www-authenticate"):
-            value = exc.headers.get(name)
-            if value:
-                print("Bridge header", name + ":", value)
-        print("Bridge unavailable; using stored sample settings")
-        return SHELLY_SETTINGS
-    except Exception as exc:
-        print("Bridge unavailable; using stored sample settings:", type(exc).__name__)
-        return SHELLY_SETTINGS
+    raw = os.getenv("SHELLY_EVENT_SETTINGS", "")
+    if raw and raw not in ("null", "{}"):
+        try:
+            data = json.loads(raw)
+            for key in ("porssi", "porssi-1", "porssi-2", "porssi-3"):
+                if not isinstance(data.get(key), dict):
+                    raise ValueError("Missing settings: " + key)
+            print("Shelly settings received directly from GitHub dispatch")
+            return data
+        except (ValueError, TypeError) as exc:
+            print("Invalid Shelly dispatch settings:", str(exc))
+    print("Using stored sample settings (scheduled/manual run)")
+    return SHELLY_SETTINGS
 
 def main():
     settings = read_settings()
