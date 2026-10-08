@@ -26,7 +26,8 @@ jobs:
           url = os.environ["SETTINGS_URL"]
           token = os.environ.get("CLOUDFLARE_READ_TOKEN", "")
           print("Read token configured:", bool(token))
-          root = url.split("/settings")[0] + "/"\n          for label, target, headers in (
+          root = url.split("/settings")[0] + "/"
+          for label, target, headers in (
               ("root without token", root, {}),\n              ("settings without token", url, {}),
               ("settings with token", url, {"Authorization": "Bearer " + token} if token else {}),
           ):
