@@ -22,15 +22,19 @@ jobs:
           SETTINGS_URL: ${{ vars.SETTINGS_URL }}
         run: |
           python - <<'PY'
-          import os, urllib.request, urllib.error
+          import os
+          import urllib.request
+          import urllib.error
           url = os.environ["SETTINGS_URL"]
           token = os.environ.get("CLOUDFLARE_READ_TOKEN", "")
+          root = url.rsplit("/settings", 1)[0] + "/"
           print("Read token configured:", bool(token))
-          root = url.split("/settings")[0] + "/"
-          for label, target, headers in (
-              ("root without token", root, {}),\n              ("settings without token", url, {}),
+          cases = [
+              ("root without token", root, {}),
+              ("settings without token", url, {}),
               ("settings with token", url, {"Authorization": "Bearer " + token} if token else {}),
-          ):
+          ]
+          for label, target, headers in cases:
               request = urllib.request.Request(target, headers=headers)
               try:
                   with urllib.request.urlopen(request, timeout=15) as response:
