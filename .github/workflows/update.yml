@@ -2,6 +2,8 @@ name: Update Sahkovatkain forecast
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [shelly_settings]
   schedule:
     - cron: "17 * * * *"
 
@@ -16,54 +18,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Diagnose Cloudflare bridge
-        env:
-          CLOUDFLARE_READ_TOKEN: ${{ secrets.CLOUDFLARE_READ_TOKEN }}
-          SETTINGS_URL: ${{ vars.SETTINGS_URL }}
-        run: |
-          python - <<'PY'
-          import os
-          import urllib.request
-          import urllib.error
-          url = os.environ["SETTINGS_URL"]
-          token = os.environ.get("CLOUDFLARE_READ_TOKEN", "")
-          root = url.rsplit("/settings", 1)[0] + "/"
-          print("Read token configured:", bool(token))
-          cases = [
-              ("root without token", root, {}),
-              ("settings without token", url, {}),
-              ("settings with token", url, {"Authorization": "Bearer " + token} if token else {}),
-          ]
-          for label, target, headers in cases:
-              request = urllib.request.Request(target, headers=headers)
-              try:
-                  with urllib.request.urlopen(request, timeout=15) as response:
-                      print(label, "HTTP", response.status, "content-type", response.headers.get("content-type"))
-              except urllib.error.HTTPError as error:
-                  print(label, "HTTP", error.code, "content-type", error.headers.get("content-type"),
-                        "cf-mitigated", error.headers.get("cf-mitigated", "none"),
-                        "cf-ray", error.headers.get("cf-ray", "none"))
-              except Exception as error:
-                  print(label, "connection error", type(error).__name__)
-          PY
-      - name: Diagnose curl connectivity
-        env:
-          SETTINGS_URL: ${{ vars.SETTINGS_URL }}
-        run: |
-          echo "Proxy variables present (values hidden):"
-          for name in HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy; do
-            if [ -n "${!name}" ]; then echo "$name=set"; else echo "$name=unset"; fi
-          done
-          echo "curl to Worker root:"
-          root="${SETTINGS_URL%/settings}/"
-          curl --silent --show-error --max-time 20 --output /dev/null --dump-header /tmp/bridge-headers --write-out 'HTTP %{http_code}; remote_ip %{remote_ip}; effective_url %{url_effective}\n' "$root" || true
-          grep -iE '^(HTTP/|server:|content-type:|cf-ray:|cf-mitigated:)' /tmp/bridge-headers || true
-          echo "curl with browser-like User-Agent:"
-          curl --silent --show-error --max-time 20 --user-agent 'Mozilla/5.0' --output /dev/null --write-out 'HTTP %{http_code}; remote_ip %{remote_ip}\n' "$root" || true
       - name: Calculate forecast
         env:
-          CLOUDFLARE_READ_TOKEN: ${{ secrets.CLOUDFLARE_READ_TOKEN }}
-          SETTINGS_URL: ${{ vars.SETTINGS_URL }}
+          SHELLY_EVENT_SETTINGS: ${{ toJSON(github.event.client_payload.settings) }}
         run: python sahkovatkain.py
       - name: Commit result if changed
         run: |
