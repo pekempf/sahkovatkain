@@ -20,6 +20,26 @@ def plan_hot_water(merged, actual, now, transfer, state=None):
     state: {"last_completed_at": ISO8601, "heated_hours": [ISO8601, ...]}.
     heated_hours contains completed hour starts since last_completed_at.
     """
+    # Shelly O1 reports accumulated relay-on seconds, not hourly timestamps.
+    if isinstance(state, dict) and "total" in state:
+        seconds = max(0, int(state["total"]))
+        completed_ts = state.get("last_completed")
+        if not completed_ts:
+            return {
+                "status": "initial_cycle_in_progress",
+                "target_hours": TARGET_HOURS,
+                "max_interval_hours": MAX_INTERVAL_HOURS,
+                "heated_seconds": seconds,
+                "remaining_seconds": max(0, TARGET_HOURS * 3600 - seconds),
+                "selected": [],
+                "note": "Tracking first four hours; completion time is not yet known.",
+            }
+        completed_at = datetime.fromtimestamp(int(completed_ts), timezone.utc)
+        state = {"last_completed_at": completed_at.isoformat(), "heated_hours": []}
+        shelly_remaining_seconds = max(0, TARGET_HOURS * 3600 - seconds)
+    else:
+        shelly_remaining_seconds = None
+
     now_utc = now.astimezone(timezone.utc)
     current_hour = now_utc.replace(minute=0, second=0, microsecond=0)
     if not isinstance(state, dict) or not state.get("last_completed_at"):
@@ -40,7 +60,8 @@ def plan_hot_water(merged, actual, now, transfer, state=None):
             already.add(hour)
     if len(already) > TARGET_HOURS:
         raise ValueError("More than four heated hours in an unfinished cycle")
-    remaining = TARGET_HOURS - len(already)
+    remaining = (TARGET_HOURS - len(already) if shelly_remaining_seconds is None
+                 else (shelly_remaining_seconds + 3599) // 3600)
     # The next cycle may only start on a later local calendar day.
     eligible = []
     for ts, spot in merged.items():
@@ -66,6 +87,7 @@ def plan_hot_water(merged, actual, now, transfer, state=None):
         "deadline": deadline.astimezone(TZ).isoformat(timespec="minutes"),
         "heated_hours": len(already),
         "remaining_hours": remaining,
+        "remaining_seconds": shelly_remaining_seconds,
         "selected": [{"start": p["start"], "price": p["price"],
                       "source": p["source"]} for p in chosen],
         "estimated_average_price": (round(sum(p["price"] for p in chosen) / len(chosen), 3)
