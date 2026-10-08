@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Test hot-water planner
+        run: python -m unittest test_hot_water_planner.py
       - name: Calculate forecast
         env:
           SHELLY_EVENT_SETTINGS: ${{ toJSON(github.event.client_payload.settings) }}
