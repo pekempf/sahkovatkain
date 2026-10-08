@@ -4,6 +4,7 @@ import io
 import json
 import os
 import urllib.parse
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -79,8 +80,16 @@ def read_settings():
                 raise ValueError("Invalid settings")
         print("Shelly settings loaded from bridge")
         return data
+    except urllib.error.HTTPError as exc:
+        print("Bridge HTTP status:", exc.code)
+        for name in ("server", "content-type", "cf-ray", "cf-mitigated", "location", "www-authenticate"):
+            value = exc.headers.get(name)
+            if value:
+                print("Bridge header", name + ":", value)
+        print("Bridge unavailable; using stored sample settings")
+        return SHELLY_SETTINGS
     except Exception as exc:
-        print("Bridge unavailable; using stored sample settings:", exc)
+        print("Bridge unavailable; using stored sample settings:", type(exc).__name__)
         return SHELLY_SETTINGS
 
 def main():
