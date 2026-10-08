@@ -16,6 +16,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Diagnose Cloudflare bridge
+        env:
+          CLOUDFLARE_READ_TOKEN: ${{ secrets.CLOUDFLARE_READ_TOKEN }}
+          SETTINGS_URL: ${{ vars.SETTINGS_URL }}
+        run: |
+          python - <<'PY'
+          import os, urllib.request, urllib.error
+          url = os.environ["SETTINGS_URL"]
+          token = os.environ.get("CLOUDFLARE_READ_TOKEN", "")
+          print("Read token configured:", bool(token))
+          for label, headers in (
+              ("without token", {}),
+              ("with token", {"Authorization": "Bearer " + token} if token else {}),
+          ):
+              request = urllib.request.Request(url, headers=headers)
+              try:
+                  with urllib.request.urlopen(request, timeout=15) as response:
+                      print(label, "HTTP", response.status, "content-type", response.headers.get("content-type"))
+              except urllib.error.HTTPError as error:
+                  print(label, "HTTP", error.code, "content-type", error.headers.get("content-type"),
+                        "cf-mitigated", error.headers.get("cf-mitigated", "none"),
+                        "cf-ray", error.headers.get("cf-ray", "none"))
+              except Exception as error:
+                  print(label, "connection error", type(error).__name__)
+          PY
       - name: Calculate forecast
         env:
           CLOUDFLARE_READ_TOKEN: ${{ secrets.CLOUDFLARE_READ_TOKEN }}
