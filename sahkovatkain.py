@@ -12,7 +12,16 @@ TZ = ZoneInfo("Europe/Helsinki")
 FORECAST_URL = "https://raw.githubusercontent.com/vividfog/nordpool-predict-fi/main/deploy/prediction.json"
 SAHKOTIN_URL = "https://sahkotin.fi/prices.csv"
 DAYS = 5
-LOADS = {"lvv": 3, "floor": 6, "direct": 12}
+# Shelly KVS sample values. Later these can be supplied by a private bridge.
+# The public repository must never contain cloud access tokens.
+SHELLY_SETTINGS = {
+    "porssi": {"vat": 25.5, "day": 3.2, "night": 1.9, "seasonal": 1},
+    "porssi-1": {"en": 1, "mode": 2, "m2": {"p": 24, "c": 4, "l": 0, "m": 5}},
+    "porssi-2": {"en": 1, "mode": 2, "m2": {"p": 24, "c": 6, "l": 0, "m": 3}},
+    "porssi-3": {"en": 1, "mode": 2, "m2": {"p": 24, "c": 10, "l": 1, "m": 4}},
+}
+LOADS = {name: SHELLY_SETTINGS[f"porssi-{i}"]["m2"]["c"]
+         for i, name in enumerate(("lvv", "floor", "direct"), 1)}
 
 def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": "sahkovatkain/0.2"})
